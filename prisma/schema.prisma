@@ -1,0 +1,68 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  sessions      ChatSession[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Chapter {
+  id            Int           @id @default(autoincrement())
+  title         String
+  content       String
+  passages      Passage[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Passage {
+  id            String        @id @default(cuid())
+  chapterId     Int
+  chapter       Chapter       @relation(fields: [chapterId], references: [id])
+  startIndex    Int
+  endIndex      Int
+  text          String
+  chats         ChatMessage[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model ChatSession {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  passageId     String
+  passage       Passage       @relation(fields: [passageId], references: [id])
+  messages      ChatMessage[]
+  startedAt     DateTime      @default(now())
+  endedAt       DateTime?
+  abandoned     Boolean       @default(false)
+  questionTypes String[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model ChatMessage {
+  id            String        @id @default(cuid())
+  sessionId     String
+  session       ChatSession   @relation(fields: [sessionId], references: [id])
+  role          String        // "user" or "assistant"
+  content       String
+  tokenCount    Int
+  questionType  String?       // e.g. "interpretive", "vocab"
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+} 
