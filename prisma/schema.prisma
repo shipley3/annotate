@@ -10,10 +10,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  STUDENT
+  TEACHER
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
   name          String?
+  role          UserRole       @default(STUDENT)
   sessions      ChatSession[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -35,7 +41,8 @@ model Passage {
   startIndex    Int
   endIndex      Int
   text          String
-  chats         ChatMessage[]
+  chatSessions  ChatSession[]
+  messages      ChatMessage[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
@@ -59,6 +66,8 @@ model ChatMessage {
   id            String        @id @default(cuid())
   sessionId     String
   session       ChatSession   @relation(fields: [sessionId], references: [id])
+  passageId     String
+  passage       Passage       @relation(fields: [passageId], references: [id])
   role          String        // "user" or "assistant"
   content       String
   tokenCount    Int

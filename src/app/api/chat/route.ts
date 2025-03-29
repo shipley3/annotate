@@ -2,11 +2,9 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function POST(req: Request) {
   try {
@@ -50,44 +48,37 @@ export async function POST(req: Request) {
       },
     });
 
-    // Get GPT response
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: `You're a thoughtful reading companion for Mary Shelley's *Frankenstein*.
+    // Get Gemini response
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const prompt = `You're a thoughtful reading companion for Mary Shelley's *Frankenstein*.
 The user highlighted this passage:
 
 """${passage}"""
 
 Engage with the user by asking a reflective question or offering gentle insight.
-If they ask a question, answer clearly but keep the conversation open-ended.`,
-        },
-        {
-          role: "user",
-          content: message,
-        },
-      ],
-    });
+If they ask a question, answer clearly but keep the conversation open-ended.
 
-    const gptResponse = completion.choices[0].message.content;
+User: ${message}`;
 
-    // Save GPT response
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const geminiResponse = response.text();
+
+    // Save the assistant's response
     await prisma.chatMessage.create({
       data: {
         sessionId: chatSession.id,
         role: "assistant",
-        content: gptResponse || "",
+        content: geminiResponse,
         tokenCount: 0, // TODO: Calculate actual token count
       },
     });
 
-    return NextResponse.json({ message: gptResponse });
+    return NextResponse.json({ message: geminiResponse });
   } catch (error) {
-    console.error("Error in chat route:", error);
+    console.error("Error in chat API:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to process chat message" },
       { status: 500 }
     );
   }
