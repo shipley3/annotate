@@ -3,12 +3,12 @@
   --foreground: #171717;
   --book-bg: #f8f5e6;
   --page-bg: #fffef7;
-  --margin-bg: #f5f1e3;
-  --margin-width: 300px;
-  --highlight-color: rgba(255, 214, 102, 0.3);
-  --active-highlight-color: rgba(255, 214, 102, 0.5);
-  --chat-user-bg: #e9e9e9;
-  --chat-ai-bg: #f0f7ff;
+  --margin-bg: #fafaf8;
+  --margin-width: 35%;
+  --highlight-color: #fff3cd;
+  --active-highlight-color: #ffd700;
+  --chat-user-bg: #e3f2fd;
+  --chat-ai-bg: #f5f5f5;
   --book-shadow: rgba(0, 0, 0, 0.2);
   --book-font: 'Georgia', serif;
 }
@@ -32,24 +32,25 @@ body {
 }
 
 .reader-container {
-  display: flex;
-  height: 100vh;
   position: relative;
-  overflow: hidden;
-  box-shadow: 0 0 30px var(--book-shadow);
-  background-color: var(--page-bg);
+  min-height: 100vh;
+  padding-top: 60px;
+  display: flex;
 }
 
 /* Book page styles */
 .book-content {
-  flex: 1;
-  padding: 3rem 4rem;
+  flex-grow: 1;
+  padding: 2rem 3rem;
+  max-width: calc(100% - var(--margin-width));
+  transition: max-width 0.3s ease-in-out;
   overflow-y: auto;
-  line-height: 1.7;
+  line-height: 1.8;
   font-size: 1.1rem;
   position: relative;
   background-color: var(--page-bg);
   border-right: 1px solid #e0ddd0;
+  color: #2c3e50;
 }
 
 .book-content::-webkit-scrollbar {
@@ -62,16 +63,13 @@ body {
 }
 
 .chapter-title {
-  font-family: var(--book-font);
   font-size: 1.8rem;
-  text-align: center;
   margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #e0ddd0;
+  color: #2c3e50;
 }
 
 .book-paragraph {
-  margin-bottom: 1.2rem;
+  margin-bottom: 1.5rem;
   position: relative;
 }
 

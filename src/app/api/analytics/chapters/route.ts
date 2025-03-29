@@ -10,46 +10,71 @@ interface ChapterAnalytics {
   completionRate: number;
 }
 
-interface ChapterWithSessions {
+interface ChatMessage {
+  id: number;
+  role: string;
+  content: string;
+  tokenCount: number;
+  questionType: string | null;
+}
+
+interface ChatSession {
+  id: number;
+  messages: ChatMessage[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface Passage {
+  id: number;
+  chatSessions: ChatSession[];
+}
+
+interface Chapter {
   id: number;
   title: string;
-  sessions: {
-    messages: any[];
-    endedAt: Date | null;
-    startedAt: Date;
-    abandoned: boolean;
-  }[];
+  passages: Passage[];
 }
 
 export async function GET() {
   try {
     const chapters = await prisma.chapter.findMany({
       include: {
-        sessions: {
+        passages: {
           include: {
-            messages: true,
+            chatSessions: {
+              include: {
+                messages: true,
+              },
+            },
           },
         },
       },
-    }) as ChapterWithSessions[];
+    }) as Chapter[];
 
-    const analytics: ChapterAnalytics[] = chapters.map((chapter) => {
-      const totalSessions = chapter.sessions?.length ?? 0;
-      const totalMessages = chapter.sessions?.reduce(
-        (sum: number, session) => sum + (session.messages?.length ?? 0),
+    const analytics = chapters.map((chapter) => {
+      // Get all sessions from all passages in this chapter
+      const allSessions = chapter.passages.flatMap((passage: Passage) => passage.chatSessions);
+      const totalSessions = allSessions.length;
+      
+      // Calculate total messages across all sessions
+      const totalMessages = allSessions.reduce(
+        (sum: number, session: ChatSession) => sum + (session.messages?.length ?? 0),
         0
-      ) ?? 0;
-      const totalDuration = chapter.sessions?.reduce(
-        (sum: number, session) => {
-          if (!session.endedAt || !session.startedAt) return sum;
-          return sum + (session.endedAt.getTime() - session.startedAt.getTime());
+      );
+      
+      // Calculate total duration across all sessions
+      const totalDuration = allSessions.reduce(
+        (sum: number, session: ChatSession) => {
+          return sum + (session.updatedAt.getTime() - session.createdAt.getTime());
         },
         0
-      ) ?? 0;
+      );
+      
       const averageSessionDuration = totalSessions > 0 ? totalDuration / totalSessions : 0;
-      const completedSessions = chapter.sessions?.filter(
-        (session) => !session.abandoned && session.endedAt !== null
-      ).length ?? 0;
+      const completedSessions = allSessions.filter(
+        (session: ChatSession) => session.messages.length > 0
+      ).length;
       const completionRate = totalSessions > 0 ? completedSessions / totalSessions : 0;
 
       return {

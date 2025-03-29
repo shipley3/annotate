@@ -20,12 +20,14 @@ export default async function ChapterPage({
   params: { id: string };
 }) {
   const chapter = await getChapter(params.id);
+  const isLetter = chapter.id < 0;
+  const displayNum = isLetter ? Math.abs(chapter.id) : chapter.id;
 
   return (
     <div className="h-100">
       <div className="mb-4">
         <h1 className="display-4">
-          Chapter {chapter.id}: {chapter.title}
+          {isLetter ? `Letter ${displayNum}` : `Chapter ${displayNum}`}
         </h1>
       </div>
       <Reader chapterId={chapter.id} content={chapter.content} />
