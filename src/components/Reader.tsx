@@ -2,18 +2,10 @@
 
 import { useState, useRef, useEffect, ReactNode } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { romanize } from "@/utils/romanize";
 
-interface ReaderProps {
-  chapterId: number;
-  content: string;
-}
-
-export default function Reader({ chapterId, content }: ReaderProps) {
-  const { data: session, status } = useSession();
-  const router = useRouter();
+export default function Reader({ chapterId, content }: { chapterId: number, content: string }) {
+  const { data: session } = useSession();
   const [selectedText, setSelectedText] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string }>>([]);
@@ -30,166 +22,158 @@ export default function Reader({ chapterId, content }: ReaderProps) {
     }
   }, [chatMessages]);
 
+  // Automatically focus the chat input when the chat is opened
+  useEffect(() => {
+    if (chatOpen && chatInputRef.current) {
+      chatInputRef.current.focus();
+    }
+  }, [chatOpen]);
+
   // Handle text selection and highlighting
   const handleSelection = () => {
     const selection = window.getSelection();
     const text = selection?.toString().trim();
     
     if (text && text.length > 10) { // Minimum length for a highlight
-      setSelectedText(text);
-      setHighlights(prev => {
-        // Check if this highlight already exists
-        const exists = prev.some(h => h.text === text);
-        if (!exists) {
-          return [...prev, { text, active: true }];
+      if (confirm('Open AI chat for this highlight?')) {
+        setSelectedText(text);
+        
+        // Add the highlight
+        setHighlights(prev => {
+          // Check if this highlight already exists
+          const exists = prev.some(h => h.text === text);
+          if (!exists) {
+            return [...prev, { text, active: true }];
+          }
+          // Otherwise just activate it
+          return prev.map(h => ({ ...h, active: h.text === text }));
+        });
+        
+        // Open the chat panel
+        setChatOpen(true);
+        
+        // Add initial AI message if this is a new conversation
+        if (chatMessages.length === 0) {
+          setChatMessages([{
+            role: "assistant",
+            content: "I noticed you highlighted this passage. What are your thoughts about it?"
+          }]);
         }
-        // Otherwise just activate it
-        return prev.map(h => ({ ...h, active: h.text === text }));
-      });
-      setChatOpen(true);
-      
-      // For testing, we'll add an initial AI message
-      if (chatMessages.length === 0) {
-        setChatMessages([{
-          role: "assistant",
-          content: "I noticed you highlighted this passage. What are your thoughts about it?"
-        }]);
       }
     }
   };
 
-  // Handle highlight click
-  const handleHighlightClick = (text: string) => {
-    setSelectedText(text);
-    setHighlights(prev => prev.map(h => ({ ...h, active: h.text === text })));
-    setChatOpen(true);
-  };
-
-  const handleSendMessage = async (message: string) => {
-    if (!message.trim()) return;
+  // Handle sending messages
+  const handleSendMessage = (userMessage: string) => {
+    if (!userMessage.trim()) return;
     
-    if (!session?.user) {
-      alert('Please sign in to continue the conversation');
-      return;
-    }
-
-    setIsLoading(true);
-    const newMessages = [...chatMessages, { role: "user", content: message }];
+    // Add user message to chat
+    const newMessages = [...chatMessages, { role: "user", content: userMessage }];
     setChatMessages(newMessages);
-
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message,
-          passage: selectedText,
-          chapterId,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send message');
-      }
-
-      const data = await response.json();
-      setChatMessages([...newMessages, { role: "assistant", content: data.message }]);
-    } catch (error) {
-      console.error("Error sending message:", error);
+    setIsLoading(true);
+    
+    // Demo responses - this will work without API
+    setTimeout(() => {
+      const aiResponses = [
+        "That's an interesting observation! The author uses this passage to highlight the theme of isolation. How do you think this relates to the novel's broader themes?",
+        "This is a pivotal moment in the narrative. Notice how Shelley uses language to convey the character's emotional state. What words or phrases stand out to you?",
+        "The Romantic period was characterized by an interest in nature and extreme emotions. How does this passage reflect those themes?",
+        "Consider how this letter foreshadows later events in the novel. What hints do you see about the character's fate?",
+        "This reflects Shelley's interest in scientific progress and its potential consequences. How might this relate to the novel's subtitle, 'The Modern Prometheus'?"
+      ];
+      
+      const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
+      
       setChatMessages([...newMessages, { 
         role: "assistant", 
-        content: "I apologize, but I encountered an error processing your message. Please try again." 
+        content: randomResponse
       }]);
-    } finally {
+      setIsLoading(false);
+      
+      // Clear input field
       if (chatInputRef.current) {
         chatInputRef.current.value = "";
         chatInputRef.current.style.height = 'auto';
       }
-      setIsLoading(false);
-    }
+    }, 1000);
   };
 
-  // Split content into paragraphs and render them
+  // Split content into paragraphs
   const paragraphs = content.split(/\n+/).filter(p => p.trim());
 
   return (
-    <>
-      {/* Top Navigation Bar */}
-      <div className="reader-topbar">
-        <div className="book-title">Frankenstein</div>
-        <div className="user-menu">
-          <div className="user-info">{session?.user?.name || "Guest"}</div>
-          {session ? (
-            <Link href="/api/auth/signout" className="btn btn-sm btn-outline-secondary">
-              Sign Out
-            </Link>
-          ) : (
-            <Link href="/api/auth/signin" className="btn btn-sm btn-primary">
-              Sign In
-            </Link>
-          )}
-        </div>
+    <div className="reader-container">
+      {/* Book Content */}
+      <div className="book-content" ref={contentRef} onMouseUp={handleSelection}>
+        <h2 className="chapter-title">
+          {chapterId > 0 ? `Chapter ${chapterId}` : 
+           (chapterId < 0 ? `Letter ${Math.abs(chapterId)}` : 'Introduction')}
+        </h2>
+        
+        {paragraphs.map((paragraph, index) => {
+          // Create a key for this paragraph
+          const paragraphKey = `p-${index}`;
+          
+          // Check if any highlights match this paragraph
+          let hasHighlight = false;
+          let displayContent: string | ReactNode = paragraph;
+          
+          highlights.forEach(highlight => {
+            if (paragraph.includes(highlight.text)) {
+              hasHighlight = true;
+              
+              // Split the paragraph at the highlight
+              const parts = paragraph.split(highlight.text);
+              
+              if (parts.length > 1) {
+                // Create JSX with the highlight wrapped in a span
+                displayContent = (
+                  <>
+                    {parts[0]}
+                    <span 
+                      className={`highlight ${highlight.active ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedText(highlight.text);
+                        setHighlights(prev => prev.map(h => ({ 
+                          ...h, 
+                          active: h.text === highlight.text 
+                        })));
+                        setChatOpen(true);
+                      }}
+                    >
+                      {highlight.text}
+                    </span>
+                    {parts.slice(1).join(highlight.text)}
+                  </>
+                );
+              }
+            }
+          });
+          
+          return (
+            <div key={paragraphKey} className="book-paragraph">
+              {displayContent}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Main Reader Container */}
-      <div className="reader-container">
-        {/* Book Content */}
-        <div className="book-content" ref={contentRef} onMouseUp={handleSelection}>
-          <h2 className="chapter-title">
-            {chapterId < 0 ? `Letter ${Math.abs(chapterId)}` : `Chapter ${romanize(chapterId)}`}
-          </h2>
-          
-          {paragraphs.map((paragraph, index) => {
-            let content: ReactNode = paragraph;
-            
-            // Apply highlights to the paragraph
-            highlights.forEach(highlight => {
-              if (paragraph.includes(highlight.text)) {
-                const parts = paragraph.split(highlight.text);
-                if (parts.length > 1) {
-                  content = parts.map((part, i) => 
-                    i === 0 ? part : (
-                      <>
-                        <span 
-                          key={`highlight-${i}`}
-                          className={`highlight ${highlight.active ? 'active' : ''}`}
-                          onClick={() => handleHighlightClick(highlight.text)}
-                        >
-                          {highlight.text}
-                        </span>
-                        {part}
-                      </>
-                    )
-                  );
-                }
-              }
-            });
-            
-            return (
-              <div key={index} className="book-paragraph">
-                {content}
-              </div>
-            );
-          })}
+      {/* Margin Chat */}
+      <div className={`margin-container ${chatOpen ? 'open' : ''}`}>
+        <div className="margin-header">
+          <h5>Conversation</h5>
+          <span 
+            className="margin-close" 
+            onClick={() => {
+              setChatOpen(false);
+              setHighlights(prev => prev.map(h => ({ ...h, active: false })));
+            }}
+          >
+            <i className="fas fa-times"></i>
+          </span>
         </div>
-
-        {/* Margin Chat */}
-        <div className={`margin-container ${chatOpen ? 'open' : ''}`}>
-          <div className="margin-header">
-            <h5>Discussion</h5>
-            <button 
-              className="margin-close"
-              onClick={() => {
-                setChatOpen(false);
-                setHighlights(prev => prev.map(h => ({ ...h, active: false })));
-              }}
-              aria-label="Close discussion"
-            >
-              ×
-            </button>
-          </div>
-          
+        
+        <div className="margin-content">
           {selectedText && (
             <div className="passage-preview">
               "{selectedText}"
@@ -208,7 +192,7 @@ export default function Reader({ chapterId, content }: ReaderProps) {
               ))}
               
               {isLoading && (
-                <div className="ai-message chat-message">
+                <div className="chat-message ai-message">
                   <div className="typing-indicator">
                     <span></span>
                     <span></span>
@@ -217,26 +201,27 @@ export default function Reader({ chapterId, content }: ReaderProps) {
                 </div>
               )}
               
-              <div ref={messagesEndRef} />
+              <div ref={messagesEndRef}></div>
             </div>
             
             <div className="chat-input-container">
               <textarea
                 ref={chatInputRef}
                 className="chat-input"
-                placeholder="Ask a question about this passage..."
+                placeholder="Type your message..."
                 rows={1}
-                onChange={(e) => {
-                  e.target.style.height = 'auto';
-                  e.target.style.height = `${e.target.scrollHeight}px`;
-                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    handleSendMessage(e.currentTarget.value);
+                    const message = e.currentTarget.value;
+                    handleSendMessage(message);
                   }
                 }}
-                disabled={isLoading}
+                onChange={(e) => {
+                  // Auto-expand the textarea
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                }}
               />
               <button
                 className="chat-send"
@@ -246,7 +231,6 @@ export default function Reader({ chapterId, content }: ReaderProps) {
                   }
                 }}
                 disabled={isLoading}
-                aria-label="Send message"
               >
                 <i className="fas fa-paper-plane"></i>
               </button>
@@ -255,7 +239,7 @@ export default function Reader({ chapterId, content }: ReaderProps) {
         </div>
       </div>
 
-      {/* Navigation */}
+      {/* Bottom Navigation */}
       <div className="reader-nav">
         <div className="page-controls">
           <Link
@@ -266,23 +250,22 @@ export default function Reader({ chapterId, content }: ReaderProps) {
           </Link>
           
           <select
-            className="chapter-selector form-select"
+            className="chapter-selector mx-2"
             value={chapterId}
-            onChange={(e) => router.push(`/chapters/${e.target.value}`)}
+            onChange={(e) => {
+              window.location.href = `/chapters/${e.target.value}`;
+            }}
           >
-            {/* Letters */}
             <optgroup label="Letters">
-              {Array.from({ length: 4 }, (_, i) => -(i + 1)).map((num) => (
-                <option key={num} value={num}>
-                  Letter {Math.abs(num)}
-                </option>
-              ))}
+              <option value="-4">Letter 4</option>
+              <option value="-3">Letter 3</option>
+              <option value="-2">Letter 2</option>
+              <option value="-1">Letter 1</option>
             </optgroup>
-            {/* Chapters */}
             <optgroup label="Chapters">
               {Array.from({ length: 24 }, (_, i) => i + 1).map((num) => (
                 <option key={num} value={num}>
-                  Chapter {romanize(num)}
+                  Chapter {num}
                 </option>
               ))}
             </optgroup>
@@ -296,6 +279,6 @@ export default function Reader({ chapterId, content }: ReaderProps) {
           </Link>
         </div>
       </div>
-    </>
+    </div>
   );
 } 
